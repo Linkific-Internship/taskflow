@@ -1,26 +1,63 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Layout from '../components/shared/Layout';
 import { useProject } from '../context/ProjectContext';
 import { useNavigate } from 'react-router-dom';
+import Toast from '../components/shared/Toast';
+import useToast from '../hooks/useToast';
 
 const Projects = () => {
   const { projects, addProject, deleteProject, getProjectTasks } = useProject();
   const navigate = useNavigate();
+  const { toast, showToast, hideToast } = useToast();
+
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [search, setSearch] = useState('');
+
+  // Search filter
+  const filteredProjects = useMemo(() => {
+    if (!search.trim()) return projects;
+    return projects.filter((p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.description?.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [projects, search]);
 
   const handleAdd = (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    setNameError('');
+
+    // Validation
+    if (!name.trim()) {
+      setNameError('Project name is required');
+      return;
+    }
+    if (name.trim().length < 3) {
+      setNameError('Project name must be at least 3 characters');
+      return;
+    }
+
     addProject(name.trim(), description.trim());
     setName('');
     setDescription('');
     setShowModal(false);
+    showToast('Project created successfully');
+  };
+
+  const handleDelete = (id, projectName) => {
+    deleteProject(id);
+    showToast(`"${projectName}" deleted`, 'error');
   };
 
   return (
     <Layout>
+      {/* Toast */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -37,16 +74,27 @@ const Projects = () => {
         </button>
       </div>
 
+      {/* Search */}
+      <div className="mb-6">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search projects..."
+          className="w-full max-w-sm border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+        />
+      </div>
+
       {/* Projects Grid */}
-      {projects.length === 0 ? (
+      {filteredProjects.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
           <p className="text-gray-400 text-sm">
-            No projects yet. Create your first project.
+            {search ? 'No projects match your search.' : 'No projects yet. Create your first project.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => {
+          {filteredProjects.map((project) => {
             const projectTasks = getProjectTasks(project.id);
             const doneTasks = projectTasks.filter(
               (t) => t.status === 'done'
@@ -74,7 +122,7 @@ const Projects = () => {
                     Open Board
                   </button>
                   <button
-                    onClick={() => deleteProject(project.id)}
+                    onClick={() => handleDelete(project.id, project.name)}
                     className="text-xs border border-gray-200 text-gray-500 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors"
                   >
                     Delete
@@ -101,11 +149,18 @@ const Projects = () => {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setNameError('');
+                  }}
                   placeholder="e.g. Website Redesign"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 ${
+                    nameError ? 'border-red-400' : 'border-gray-300'
+                  }`}
                 />
+                {nameError && (
+                  <p className="text-xs text-red-500 mt-1">{nameError}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -128,7 +183,12 @@ const Projects = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setNameError('');
+                    setName('');
+                    setDescription('');
+                  }}
                   className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
                 >
                   Cancel

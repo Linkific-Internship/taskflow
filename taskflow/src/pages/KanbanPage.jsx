@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/shared/Layout';
 import { useProject } from '../context/ProjectContext';
+import Toast from '../components/shared/Toast';
+import useToast from '../hooks/useToast';
 
 const COLUMNS = [
   { id: 'todo', label: 'To Do' },
@@ -21,6 +23,7 @@ const KanbanPage = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { projects, getProjectTasks, addTask, deleteTask, moveTask } = useProject();
+  const { toast, showToast, hideToast } = useToast();
 
   const project = projects.find((p) => p.id === projectId);
   const tasks = getProjectTasks(projectId);
@@ -28,9 +31,19 @@ const KanbanPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [title, setTitle] = useState('');
+  const [titleError, setTitleError] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
   const [dueDate, setDueDate] = useState('');
+
+  // Filter states
+  const [filterPriority, setFilterPriority] = useState('all');
+
+  // Filtered tasks
+  const filteredTasks = useMemo(() => {
+    if (filterPriority === 'all') return tasks;
+    return tasks.filter((t) => t.priority === filterPriority);
+  }, [tasks, filterPriority]);
 
   if (!project) {
     return (
@@ -42,21 +55,46 @@ const KanbanPage = () => {
 
   const handleAddTask = (e) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    setTitleError('');
+
+    // Validation
+    if (!title.trim()) {
+      setTitleError('Task title is required');
+      return;
+    }
+    if (title.trim().length < 3) {
+      setTitleError('Title must be at least 3 characters');
+      return;
+    }
+
     addTask(projectId, title.trim(), description.trim(), priority, dueDate);
     setTitle('');
     setDescription('');
     setPriority('medium');
     setDueDate('');
     setShowModal(false);
+    showToast('Task added successfully');
   };
 
   const handleMoveTask = (taskId, newStatus) => {
     moveTask(taskId, newStatus);
+    const statusLabel = COLUMNS.find((c) => c.id === newStatus)?.label;
+    showToast(`Task moved to ${statusLabel}`);
+  };
+
+  const handleDeleteTask = (taskId) => {
+    deleteTask(taskId);
+    setSelectedTask(null);
+    showToast('Task deleted', 'error');
   };
 
   return (
     <Layout>
+      {/* Toast */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={hideToast} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -79,10 +117,30 @@ const KanbanPage = () => {
         </button>
       </div>
 
+      {/* Filter Bar */}
+      <div className="flex items-center gap-3 mb-6">
+        <span className="text-xs text-gray-500 font-medium">Filter by priority:</span>
+        <div className="flex gap-2">
+          {['all', 'high', 'medium', 'low'].map((p) => (
+            <button
+              key={p}
+              onClick={() => setFilterPriority(p)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                filterPriority === p
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Kanban Columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {COLUMNS.map((col) => {
-          const colTasks = tasks.filter((t) => t.status === col.id);
+          const colTasks = filteredTasks.filter((t) => t.status === col.id);
           return (
             <div
               key={col.id}
@@ -144,11 +202,18 @@ const KanbanPage = () => {
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setTitleError('');
+                  }}
                   placeholder="Task title"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 ${
+                    titleError ? 'border-red-400' : 'border-gray-300'
+                  }`}
                 />
+                {titleError && (
+                  <p className="text-xs text-red-500 mt-1">{titleError}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -200,7 +265,11 @@ const KanbanPage = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setTitleError('');
+                    setTitle('');
+                  }}
                   className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors"
                 >
                   Cancel
@@ -263,10 +332,7 @@ const KanbanPage = () => {
 
             <div className="flex gap-2">
               <button
-                onClick={() => {
-                  deleteTask(selectedTask.id);
-                  setSelectedTask(null);
-                }}
+                onClick={() => handleDeleteTask(selectedTask.id)}
                 className="flex-1 text-xs border border-red-200 text-red-500 py-2 rounded-lg hover:bg-red-50 transition-colors"
               >
                 Delete Task
