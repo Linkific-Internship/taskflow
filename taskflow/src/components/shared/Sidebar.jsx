@@ -29,4 +29,4 @@ const Sidebar = () => {
   );
 };
 
-export default Sidebar;F
+export default Sidebar;
