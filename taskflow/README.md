@@ -101,7 +101,5 @@ src/
 | SEO | 82 |
 
 ## 🔗 Live Demo
-Coming soon — Netlify deployment (Day 30)
-```
+[TaskFlow — Live on Netlify](https://taskflowday30.netlify.app)
 
-## 📁 Project Structure
